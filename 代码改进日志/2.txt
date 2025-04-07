@@ -1,0 +1,598 @@
+index.html：
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <!-- 基础元信息配置 -->
+    <meta charset="UTF-8"> <!-- 设置字符编码为UTF-8 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- 移动端视口适配 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"> <!-- 禁用缓存 -->
+    <meta http-equiv="Pragma" content="no-cache"> <!-- 兼容旧版HTTP缓存控制 -->
+    <meta http-equiv="Expires" content="0"> <!-- 立即过期缓存 -->
+    <title>AI图像生成器</title> <!-- 页面标题 -->
+    
+    <!-- 内联样式避免外部依赖 -->
+    <style>
+        /* 基础页面样式 */
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif; /* 使用系统默认字体 */
+            max-width: 800px; /* 限制内容宽度 */
+            margin: 20px auto; /* 居中显示 */
+            padding: 0 20px; /* 左右留白 */
+        }
+
+        /* 加载动画样式 */
+        .loader {
+            border: 4px solid #f3f3f3; /* 浅灰色边框 */
+            border-top: 4px solid #3498db; /* 蓝色顶部边框 */
+            border-radius: 50%; /* 圆形效果 */
+            width: 30px; /* 尺寸设置 */
+            height: 30px;
+            animation: spin 1s linear infinite; /* 旋转动画 */
+            margin: 20px auto; /* 居中显示 */
+        }
+
+        /* 加载动画关键帧 */
+        @keyframes spin {
+            0% { transform: rotate(0deg); } /* 起始角度 */
+            100% { transform: rotate(360deg); } /* 结束角度 */
+        }
+
+        /* 输入框样式 */
+        #prompt-text {
+            width: 100%; /* 全宽显示 */
+            padding: 12px; /* 内边距 */
+            border: 2px solid #3498db; /* 蓝色边框 */
+            border-radius: 6px; /* 圆角 */
+            margin: 15px 0; /* 外边距 */
+            font-size: 16px; /* 字体大小 */
+        }
+
+        /* 按钮交互样式 */
+        button {
+            background: #3498db; /* 蓝色背景 */
+            color: white; /* 白色文字 */
+            padding: 12px 25px; /* 内边距 */
+            border: none; /* 去除边框 */
+            border-radius: 6px; /* 圆角 */
+            cursor: pointer; /* 手型指针 */
+            transition: all 0.3s ease; /* 过渡动画 */
+            font-size: 16px; /* 字体大小 */
+            width: 100%; /* 全宽按钮 */
+        }
+
+        /* 按钮悬停效果 */
+        button:hover {
+            background: #2980b9; /* 深蓝色 */
+            transform: translateY(-2px); /* 上浮效果 */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1); /* 阴影效果 */
+        }
+
+        /* 图片容器样式 */
+        #image-container {
+            margin-top: 25px; /* 顶部外边距 */
+            text-align: center; /* 内容居中 */
+            min-height: 300px; /* 最小高度防止布局抖动 */
+        }
+
+        /* 生成图片样式 */
+        #generated-image {
+            max-width: 100%; /* 响应式宽度 */
+            height: auto; /* 保持比例 */
+            border-radius: 8px; /* 圆角 */
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* 立体阴影 */
+            display: none; /* 默认隐藏 */
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面主标题 -->
+    <h1>AI图像生成器</h1>
+    
+    <!-- 提示词输入区域 -->
+    <div>
+        <label for="prompt-text">创作提示：</label>
+        <input 
+            type="text" 
+            id="prompt-text" 
+            placeholder="请输入描述文字，例如：'夕阳下的海滩，卡通风格'"
+            aria-label="图像描述输入框" <!-- 无障碍支持 -->
+        >
+    </div>
+
+    <!-- 生成按钮 -->
+    <button onclick="handleGenerate()" id="generate-btn">
+        立即生成
+    </button>
+
+    <!-- 图片展示区域 -->
+    <div id="image-container">
+        <div class="loader" style="display: none;"></div> <!-- 加载指示器 -->
+        <img 
+            id="generated-image" 
+            src="" 
+            alt="生成结果展示" 
+            aria-describedby="image-description" <!-- 无障碍关联 -->
+        >
+    </div>
+
+    <script>
+        // 全局状态管理
+        let currentRequest = null; // 用于存储当前请求对象
+        
+        // 生成按钮点击处理器
+        async function handleGenerate() {
+            const promptText = document.getElementById("prompt-text").value.trim();
+            const generateBtn = document.getElementById("generate-btn");
+            
+            // 输入验证
+            if (!promptText) {
+                alert("请输入创作描述");
+                return;
+            }
+
+            // 禁用按钮防止重复提交
+            generateBtn.disabled = true;
+            generateBtn.textContent = "生成中...";
+            
+            try {
+                // 显示加载指示器
+                document.querySelector('.loader').style.display = 'block';
+                
+                // 创建请求控制器（支持超时中断）
+                const controller = new AbortController();
+                currentRequest = controller;
+                setTimeout(() => controller.abort(), 60000); // 60秒超时
+
+                // 发送生成请求
+                const response = await fetch('http://localhost:5000/generate_image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest' // 防止CSRF误判
+                    },
+                    body: JSON.stringify({ prompt_text: promptText }),
+                    signal: controller.signal,
+                    mode: 'cors',
+                    credentials: 'include'
+                });
+
+                // 处理HTTP错误状态
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(`[${response.status}] ${error.message}`);
+                }
+
+                // 解析响应数据
+                const result = await response.json();
+                if (result.status === 'success') {
+                    // 轮询获取最新图片
+                    setTimeout(pollImage, 5000); // 5秒后开始轮询
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                // 错误处理
+                console.error('生成失败:', error);
+                alert(`生成失败: ${error.message}`);
+                resetUI();
+            }
+        }
+
+        // 轮询获取最新图片
+        async function pollImage(attempt = 0) {
+            try {
+                const response = await fetch('/get_latest_image', {
+                    cache: 'no-store' // 禁用缓存
+                });
+
+                if (response.status === 404 && attempt < 6) { // 最多重试6次
+                    setTimeout(() => pollImage(attempt + 1), 3000); // 3秒重试
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`图片获取失败: ${response.status}`);
+                }
+
+                // 处理图片数据
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+                const imgElement = document.getElementById('generated-image');
+                
+                // 图片加载完成处理
+                imgElement.onload = () => {
+                    URL.revokeObjectURL(imageUrl); // 释放内存
+                    document.querySelector('.loader').style.display = 'none';
+                    imgElement.style.display = 'block';
+                    resetUI();
+                };
+                
+                imgElement.src = imageUrl;
+            } catch (error) {
+                console.error('图片获取失败:', error);
+                alert(error.message);
+                resetUI();
+            }
+        }
+
+        // 重置界面状态
+        function resetUI() {
+            document.getElementById('generate-btn').disabled = false;
+            document.getElementById('generate-btn').textContent = "立即生成";
+            if (currentRequest) {
+                currentRequest.abort(); // 中止未完成请求
+                currentRequest = null;
+            }
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('load', () => {
+            // 输入框回车事件绑定
+            document.getElementById('prompt-text').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleGenerate();
+            });
+        });
+    </script>
+</body>
+</html>
+web_app.py：
+# web_app.py
+
+from flask import Flask, render_template, request, jsonify, send_file  # Ensure 'request' is imported
+import subprocess  # 用于运行外部脚本
+import os          # 文件路径操作
+
+app = Flask(__name__)  # 创建Flask应用实例
+
+@app.route('/generate_image', methods=['POST'])
+def generate_image():
+    """处理图像生成请求"""
+    try:
+        # 从JSON请求体中获取提示词，默认为"default"
+        prompt_text = request.json.get("prompt_text", "default")
+        
+        print(f"开始生成图像，提示词: {prompt_text}")  # 添加日志
+        
+        # 检查目标脚本是否存在
+        script_path = 'C:/Users/19519362920/Desktop/comfyui-web/websockets_api_example.py'
+        if not os.path.exists(script_path):
+            raise FileNotFoundError(f"生成脚本未找到: {script_path}")
+        
+        # 调用外部Python脚本进行图像生成
+        result = subprocess.run(
+            ['python', script_path, prompt_text],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        
+        print(f"脚本输出: {result.stdout}")  # 添加日志
+        
+        # 返回成功响应
+        return jsonify({
+            "status": "success",
+            "message": "图像生成已启动",
+            "output": result.stdout,
+            "prompt": prompt_text  # 添加提示词到响应中
+        })
+    
+    except subprocess.CalledProcessError as e:
+        # 处理子进程错误
+        error_message = e.stderr or str(e)
+        print("子进程错误:", error_message)
+        return jsonify({
+            "status": "error",
+            "message": "图像生成失败",
+            "error": error_message
+        }), 500  # 返回500错误状态码
+
+    except Exception as e:
+        # 处理其他未知错误
+        print("未知错误:", str(e))
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/get_latest_image', methods=['GET'])
+def get_latest_image():
+    """获取最新生成的图像"""
+    try:
+        # 从状态文件读取最新图像路径
+        with open("latest_image.txt", "r") as f:
+            image_path = f.read().strip()
+        
+        if os.path.exists(image_path):
+            # 发送图像文件
+            return send_file(image_path, mimetype='image/png')
+        else:
+            return jsonify({"status": "error", "message": "图像未找到"}), 404
+    except FileNotFoundError:
+        return jsonify({"status": "error", "message": "尚未生成图像"}), 404
+
+@app.route('/')
+def index():
+    """渲染主页"""
+    return render_template('index.html')  # 使用Jinja2模板渲染页面
+
+if __name__ == "__main__":
+    app.run(port=5000)  # 启动Flask开发服务器
+websockets_api_example.py：
+# websockets_api_example.py
+
+# 该示例使用websockets API监听提示词执行完成事件，完成后通过/history端点下载图像
+
+import websocket  # 注意：使用websocket-client库(https://github.com/websocket-client/websocket-client)
+import uuid       # 用于生成唯一客户端ID
+import json       # 处理JSON数据
+import urllib.request  # 发送HTTP请求
+import urllib.parse    # URL编码处理
+import os         # 文件系统操作
+import glob       # 文件路径匹配
+import sys        # 命令行参数处理
+
+# 服务器地址配置
+server_address = "127.0.0.1:8188"  # ComfyUI服务器地址
+client_id = str(uuid.uuid4())       # 生成唯一客户端标识
+
+def queue_prompt(prompt):
+    """将提示词任务加入执行队列"""
+    # 构造请求数据：包含提示词结构和客户端ID
+    request_data = {"prompt": prompt, "client_id": client_id}
+    data = json.dumps(request_data).encode('utf-8')  # 序列化为JSON字节流
+    print("发送提示数据:", request_data)  # 调试输出
+
+    # 设置请求头并创建请求对象
+    headers = {'Content-Type': 'application/json'}
+    req = urllib.request.Request(
+        f"http://{server_address}/prompt", 
+        data=data, 
+        headers=headers
+    )
+    
+    try:
+        # 发送请求并获取响应
+        response = urllib.request.urlopen(req)
+        return json.loads(response.read())  # 解析响应JSON
+    except urllib.error.HTTPError as e:
+        # 处理HTTP错误
+        print(f"HTTP错误: {e.code} - {e.reason}")
+        print(e.read().decode())  # 输出服务器错误信息
+        raise
+
+def get_image(filename, subfolder, folder_type):
+    """根据文件名获取生成的图像数据"""
+    data = {"filename": filename, "subfolder": subfolder, "type": folder_type}
+    url_values = urllib.parse.urlencode(data)  # URL编码参数
+    # 构建查看图像的URL请求
+    with urllib.request.urlopen(f"http://{server_address}/view?{url_values}") as response:
+        return response.read()  # 返回图像二进制数据
+
+def get_history(prompt_id):
+    """获取指定提示ID的执行历史记录"""
+    with urllib.request.urlopen(f"http://{server_address}/history/{prompt_id}") as response:
+        return json.loads(response.read())  # 解析历史记录JSON
+
+def get_images(ws, prompt):
+    """通过WebSocket监听执行进度并获取生成的图像"""
+    prompt_id = queue_prompt(prompt)['prompt_id']  # 提交提示词并获取ID
+    output_images = {}  # 存储输出图像
+    
+    while True:
+        out = ws.recv()  # 接收WebSocket消息
+        if isinstance(out, str):
+            message = json.loads(out)  # 解析JSON消息
+            if message['type'] == 'executing':  # 检查执行状态
+                data = message['data']
+                # 当节点执行完成且提示ID匹配时退出循环
+                if data['node'] is None and data['prompt_id'] == prompt_id:
+                    break
+        else:
+            # 二进制数据为潜在预览图（此处未处理）
+            continue
+    
+    # 从历史记录获取输出图像
+    history = get_history(prompt_id)
+    history = history[prompt_id]['outputs']
+    
+    # 收集所有输出图像数据
+    for node_id in history:
+        node_output = history[node_id]
+        if 'images' in node_output:
+            images_output = []
+            for image in node_output['images']:
+                image_data = get_image(image['filename'], image['subfolder'], image['type'])
+                images_output.append(image_data)
+            output_images[node_id] = images_output
+    
+    return output_images
+
+def generate_image_with_comfyui(prompt_text):
+    """使用新版工作流配置生成图像"""
+    # 完整工作流配置
+    prompt = {
+        # CLIP文本编码器（正向提示词）
+        "6": {
+            "inputs": {
+                "text": prompt_text,  # 动态传入的提示词
+                "speak_and_recognation": True,  # 语音识别标记
+                "clip": ["11", 0]     # 连接双CLIP加载器
+            },
+            "class_type": "CLIPTextEncode",
+            "_meta": {"title": "CLIP文本编码器"}
+        },
+        
+        # VAE加载器
+        "10": {
+            "inputs": {"vae_name": "ae.sft"},
+            "class_type": "VAELoader",
+            "_meta": {"title": "VAE加载器"}
+        },
+        
+        # 双CLIP加载器
+        "11": {
+            "inputs": {
+                "clip_name1": "t5\\t5xxl_fp8_e4m3fn.safetensors",
+                "clip_name2": "clip_l.safetensors",
+                "type": "flux"
+            },
+            "class_type": "DualCLIPLoader",
+            "_meta": {"title": "双CLIP加载器"}
+        },
+        
+        # UNET主模型加载
+        "12": {
+            "inputs": {
+                "unet_name": "F.1基础算法模型-哩布在线可运行_F.1-dev-fp8.safetensors",
+                "weight_dtype": "fp8_e4m3fn"
+            },
+            "class_type": "UNETLoader",
+            "_meta": {"title": "UNET加载器"}
+        },
+        
+        # 高级采样器配置
+        "13": {
+            "inputs": {
+                "noise": ["25", 0],     # 随机噪声输入
+                "guider": ["22", 0],   # 引导器配置
+                "sampler": ["16", 0],  # 采样器选择
+                "sigmas": ["17", 0],   # 调度器参数
+                "latent_image": ["70", 0]  # 初始潜空间
+            },
+            "class_type": "SamplerCustomAdvanced",
+            "_meta": {"title": "自定义采样器(高级)"}
+        },
+        
+        # K采样器选择
+        "16": {
+            "inputs": {"sampler_name": "euler"},
+            "class_type": "KSamplerSelect",
+            "_meta": {"title": "K采样器选择"}
+        },
+        
+        # 调度器配置
+        "17": {
+            "inputs": {
+                "scheduler": "simple",  # 简单调度模式
+                "steps": 45,           # 总采样步数
+                "denoise": 1,          # 去噪强度
+                "model": ["73", 0]     # 连接LoRA模型
+            },
+            "class_type": "BasicScheduler",
+            "_meta": {"title": "基础调度器"}
+        },
+        
+        # 引导器配置
+        "22": {
+            "inputs": {
+                "model": ["73", 0],      # 主模型输入
+                "conditioning": ["6", 0] # 文本编码输入
+            },
+            "class_type": "BasicGuider",
+            "_meta": {"title": "基础引导"}
+        },
+        
+        # 随机噪声生成
+        "25": {
+            "inputs": {"noise_seed": 1007042570686024},  # 固定随机种子
+            "class_type": "RandomNoise",
+            "_meta": {"title": "随机噪波"}
+        },
+        
+        # VAE解码器
+        "64": {
+            "inputs": {
+                "samples": ["13", 0],  # 采样器输出
+                "vae": ["10", 0]       # VAE模型输入
+            },
+            "class_type": "VAEDecode",
+            "_meta": {"title": "VAE解码"}
+        },
+        
+        # 图像预览节点
+        "65": {
+            "inputs": {"images": ["64", 0]},  # 解码后的图像
+            "class_type": "PreviewImage",
+            "_meta": {"title": "预览图像"}
+        },
+        
+        # 初始潜空间生成
+        "70": {
+            "inputs": {
+                "width": 512,        # 图像宽度
+                "height": 512,      # 图像高度
+                "batch_size": 1      # 生成批次
+            },
+            "class_type": "EmptyLatentImage",
+            "_meta": {"title": "空Latent"}
+        },
+        
+        # LoRA模型加载
+        "73": {
+            "inputs": {
+                "lora_name": "F.1-矢量卡通风格LOGO_V1.safetensors",
+                "strength_model": 2.5,  # 模型权重强度
+                "model": ["12", 0]      # 基础模型输入
+            },
+            "class_type": "LoraLoaderModelOnly",
+            "_meta": {"title": "LoRA加载器(仅模型)"}
+        }
+    }
+
+    # 动态参数配置示例
+    # 修改随机种子
+    prompt["25"]["inputs"]["noise_seed"] = int(time.time() * 1000) % 2**32
+    
+    # 调整采样步数
+    prompt["17"]["inputs"]["steps"] = 50  
+    
+    # 动态修改LoRA权重
+    prompt["73"]["inputs"]["strength_model"] = 2.0
+    
+    # 以下保持原有WebSocket通信逻辑
+    ws = websocket.WebSocket()
+    ws.connect(f"ws://{server_address}/ws?clientId={client_id}")
+    images = get_images(ws, prompt)
+    ws.close()
+
+    # 输出处理（根据实际需求调整）
+    output_directory = r"D:\\comfyui-portable-nfc1.2-windows\\ComfyUI\\temp"
+    list_of_files = glob.glob(os.path.join(output_directory, "*.png"))
+    
+    if list_of_files:
+        latest_file = max(list_of_files, key=os.path.getctime)
+        print(f"生成完成: {latest_file}")
+        return latest_file
+    else:
+        print("生成失败，请检查工作流配置")
+        return None
+
+    # 连接WebSocket服务器
+    ws = websocket.WebSocket()
+    ws.connect(f"ws://{server_address}/ws?clientId={client_id}")
+    
+    # 获取生成图像
+    images = get_images(ws, prompt)
+    ws.close()  # 关闭连接
+
+    # 检查输出目录中的图像文件
+    output_directory = r"D:\\comfyui-portable-nfc1.2-windows\\ComfyUI\\temp"
+    list_of_files = glob.glob(os.path.join(output_directory, "GUO*.PNG"))
+    
+    if not list_of_files:
+        print("未找到符合条件的图像文件")
+        return
+
+    # 记录最新生成的图像路径
+    latest_file = max(list_of_files, key=os.path.getctime)
+    with open("latest_image.txt", "w") as f:
+        f.write(latest_file)
+    print(f"图像保存路径: {latest_file}")
+
+# 主程序入口
+if __name__ == "__main__":
+    if len(sys.argv) > 1:  # 检查命令行参数
+        prompt_text = sys.argv[1]  # 获取提示词参数
+        generate_image_with_comfyui(prompt_text)
+    else:
+        print("请提供提示词参数")

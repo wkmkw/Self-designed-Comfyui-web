@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <mate charset="utf-8" />
+        <title>logo设计</title>
+        <style>
+            css(css-ruleoselectorexpected)
+            *{
+                margin:0;
+                padding: 0;
+            }
+            body{
+                font-size: 16px;
+            }
+            li{
+                list-style: none;
+            }           
+            .logo{
+                width:100%;
+                text-align: center;
+                margin: 20px 0 50px 0; 
+            }
+            .logo h4{
+                cursor: pointer;
+                font-size: 30px;
+                letter-spacing: 2px;
+                margin-top: 10px;
+                margin-bottom: 5px;
+            }
+            .logo h4:hover{
+                color: #ce8460;
+            }
+            .logo p{
+                font-size: 16px;
+            }
+            .nav {
+                border-top: 1px solid #eee;
+                border-bottom: 1px solid #eee;
+                background: white;
+            }
+            .nav > ul {
+                display: flex;
+                justify-content: center;
+                padding: 1rem 0;
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+
+            .nav li {
+                position: relative;
+                margin: 0 1.5rem;
+            }
+
+            .nav a {
+                color: var(--text-color);
+                text-decoration: none;
+                padding: 0.5rem 1rem;
+                border-radius: 4px;
+                transition: all 0.3s;
+                position: relative;
+            }
+
+            .nav a::after {
+                content: '';
+                position: absolute;
+                bottom: -3px;
+                left: 50%;
+                width: 0;
+                height: 2px;
+                background: var(--primary-color);
+                transition: all 0.3s;
+            }
+
+            .nav a:hover::after {
+                width: 100%;
+                left: 0;
+            }
+            .banner{
+                width:1020px;
+                margin:20px auto;
+            }
+            .banner img{
+                width:100%;
+            }
+            .about{
+                width:1020px;
+                margin: auto;
+            }
+            .about h3{
+                display: flex;
+                align-items: center;
+                color: #ce8460;
+                font-size: 24px;
+            }
+            .about h3::before{
+                content:" ";
+                display: inline-block;
+                width: 5px;
+                height: 25px;
+                margin-right: 10px;
+                background: #ce8460;
+            }
+            .about p{
+                line-height: 1.8;
+                margin: 20px,0;
+                text-indent: 2em;
+            }
+            .vedio{
+                margin: 20px 0;
+            }
+            .aaa{
+                width:800px;
+                margin:20px auto;
+            }
+            .aaa img{
+            width:100%;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="logo">
+                <img src="{{ url_for('static', filename='images/1.png') }}" alt="示例图片">
+                <h4>AI Logo工坊</h4>
+                <p>智能设计，彰显个性</p>
+            </div>
+            <div class="nav">
+                <ul>
+                    <li>
+                        <a href="http://localhost:5001/index">首页</a>
+                    </li>
+                    <li>
+                        <a href="http://localhost:5001/about">样本展出</a>  
+                    </li>
+                    <li>
+                        <a href="http://localhost:5001/">logo制作</a>
+                    </li>
+            </div>
+        </div>
+        <div class="banner">
+            <img src="{{ url_for('static', filename='images/2.png') }}" alt="示例图片">
+        </div>
+        <div class="about">
+            <h3>关于我们</h3>
+            <p>通过WebSocket与ComfyUI服务器通信，支持用户输入提示词生成图像。
+                用户可通过前端页面输入描述（如“科技感字母标志，蓝黑渐变风格”），
+                点击“立即生成”按钮后，系统将提示词发送至后端，启动图像生成任务。
+                生成过程中，前端通过轮询机制获取最新生成的图像并显示在页面上。
+                系统支持动态调整生成参数（如噪声种子、采样步骤等），
+                并提供了友好的UI交互，包括加载动画和错误提示，适合需要快速生成个性化图像的场景。</p>
+        </div>
+        <div class="about">
+            <h3>视频资料</h3>
+            <div class="video">
+                <video width="820" height="" controls>
+                    <source src="{{ url_for('static', filename='video/1.mp4') }}" type="video/mp4">
+                </video>
+            </div>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,587 @@
+\\ai生图部分的api，workflow_api：
+{
+  "6": {
+    "inputs": {
+      "text": "In a flat style, the emblem is shaped like a broken crystal, with an overall irregularity and the edges cut into faceted forms by cracks and sharp angles. The center is deep red, with a golden energy texture, like lightning flowing inside. The broken parts are highlighted in orange, giving a visual effect of cracking. There are a few floating fragments on the outside of the badge, bringing a sense of dynamic and unstable mysterious atmosphere, symbolizing the powerful energy is surging\n",
+      "speak_and_recognation": true,
+      "clip": [
+        "11",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP文本编码器"
+    }
+  },
+  "10": {
+    "inputs": {
+      "vae_name": "ae.sft"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "VAE加载器"
+    }
+  },
+  "11": {
+    "inputs": {
+      "clip_name1": "t5\\t5xxl_fp8_e4m3fn.safetensors",
+      "clip_name2": "clip_l.safetensors",
+      "type": "flux"
+    },
+    "class_type": "DualCLIPLoader",
+    "_meta": {
+      "title": "双CLIP加载器"
+    }
+  },
+  "12": {
+    "inputs": {
+      "unet_name": "F.1基础算法模型-哩布在线可运行_F.1-dev-fp8.safetensors",
+      "weight_dtype": "fp8_e4m3fn"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "UNET加载器"
+    }
+  },
+  "13": {
+    "inputs": {
+      "noise": [
+        "25",
+        0
+      ],
+      "guider": [
+        "22",
+        0
+      ],
+      "sampler": [
+        "16",
+        0
+      ],
+      "sigmas": [
+        "17",
+        0
+      ],
+      "latent_image": [
+        "70",
+        0
+      ]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": {
+      "title": "自定义采样器(高级)"
+    }
+  },
+  "16": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": {
+      "title": "K采样器选择"
+    }
+  },
+  "17": {
+    "inputs": {
+      "scheduler": "simple",
+      "steps": 45,
+      "denoise": 1,
+      "model": [
+        "73",
+        0
+      ]
+    },
+    "class_type": "BasicScheduler",
+    "_meta": {
+      "title": "基础调度器"
+    }
+  },
+  "22": {
+    "inputs": {
+      "model": [
+        "73",
+        0
+      ],
+      "conditioning": [
+        "6",
+        0
+      ]
+    },
+    "class_type": "BasicGuider",
+    "_meta": {
+      "title": "基础引导"
+    }
+  },
+  "25": {
+    "inputs": {
+      "noise_seed": 1007042570686024
+    },
+    "class_type": "RandomNoise",
+    "_meta": {
+      "title": "随机噪波"
+    }
+  },
+  "64": {
+    "inputs": {
+      "samples": [
+        "13",
+        0
+      ],
+      "vae": [
+        "10",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE解码"
+    }
+  },
+  "65": {
+    "inputs": {
+      "images": [
+        "64",
+        0
+      ]
+    },
+    "class_type": "PreviewImage",
+    "_meta": {
+      "title": "预览图像"
+    }
+  },
+  "70": {
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "空Latent"
+    }
+  },
+  "73": {
+    "inputs": {
+      "lora_name": "F.1-矢量卡通风格LOGO_V1.safetensors",
+      "strength_model": 2.5,
+      "model": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "LoRA加载器(仅模型)"
+    }
+  }
+}
+
+\\websockets_api_example.py:
+#This is an example that uses the websockets api to know when a prompt execution is done
+#Once the prompt execution is done it downloads the images using the /history endpoint
+
+import websocket #NOTE: websocket-client (https://github.com/websocket-client/websocket-client)
+import uuid
+import json
+import urllib.request
+import urllib.parse
+import os
+import glob
+import sys
+
+server_address = "127.0.0.1:8188"
+client_id = str(uuid.uuid4())
+
+def queue_prompt(prompt):
+    # 包装 prompt 数据结构，使其符合服务器预期
+    request_data = {"prompt": prompt, "client_id": client_id}
+    data = json.dumps(request_data).encode('utf-8')
+    print("Sending prompt data:", request_data)  # 输出调试信息
+
+    headers = {'Content-Type': 'application/json'}
+    req = urllib.request.Request(f"http://{server_address}/prompt", data=data, headers=headers)
+    
+    try:
+        response = urllib.request.urlopen(req)
+        return json.loads(response.read())
+    except urllib.error.HTTPError as e:
+        print(f"HTTPError: {e.code} - {e.reason}")
+        print(e.read().decode())  # 输出服务器返回的错误信息
+        raise
+
+def get_image(filename, subfolder, folder_type):
+    data = {"filename": filename, "subfolder": subfolder, "type": folder_type}
+    url_values = urllib.parse.urlencode(data)
+    with urllib.request.urlopen("http://{}/view?{}".format(server_address, url_values)) as response:
+        return response.read()
+
+def get_history(prompt_id):
+    with urllib.request.urlopen("http://{}/history/{}".format(server_address, prompt_id)) as response:
+        return json.loads(response.read())
+
+def get_images(ws, prompt):
+    prompt_id = queue_prompt(prompt)['prompt_id']
+    output_images = {}
+    while True:
+        out = ws.recv()
+        if isinstance(out, str):
+            message = json.loads(out)
+            if message['type'] == 'executing':
+                data = message['data']
+                if data['node'] is None and data['prompt_id'] == prompt_id:
+                    break #Execution is done
+        else:
+            # If you want to be able to decode the binary stream for latent previews, here is how you can do it:
+            # bytesIO = BytesIO(out[8:])
+            # preview_image = Image.open(bytesIO) # This is your preview in PIL image format, store it in a global
+            continue #previews are binary data
+
+
+
+    return output_images
+
+def generate_image_with_comfyui(prompt_text):
+    # 使用预定义的 JSON 结构
+    prompt = {
+        "3": {
+            "inputs": {
+                "seed": 770537520761403,
+                "steps": 20,
+                "cfg": 8,
+                "sampler_name": "euler",
+                "scheduler": "normal",
+                "denoise": 1,
+                "model": ["4", 0],
+                "positive": ["6", 0],
+                "negative": ["7", 0],
+                "latent_image": ["5", 0]
+            },
+            "class_type": "KSampler",
+            "_meta": {"title": "KSampler"}
+        },
+        "4": {
+            "inputs": {"ckpt_name": "1.5\\counterfeitV30_25.safetensors"},
+            "class_type": "CheckpointLoaderSimple",
+            "_meta": {"title": "Load Checkpoint"}
+        },
+        "5": {
+            "inputs": {"width": 512, "height": 512, "batch_size": 1},
+            "class_type": "EmptyLatentImage",
+            "_meta": {"title": "Empty Latent Image"}
+        },
+        "6": {
+            "inputs": {
+                "text": prompt_text,  # 直接使用传入的提示词
+                "clip": ["4", 1]
+            },
+            "class_type": "CLIPTextEncode",
+            "_meta": {"title": "CLIP Text Encode (Prompt)"}
+        },
+        "7": {
+            "inputs": {
+                "text": "text, watermark",
+                "clip": ["4", 1]
+            },
+            "class_type": "CLIPTextEncode",
+            "_meta": {"title": "CLIP Text Encode (Prompt)"}
+        },
+        "8": {
+            "inputs": {
+                "samples": ["3", 0],
+                "vae": ["4", 2]
+            },
+            "class_type": "VAEDecode",
+            "_meta": {"title": "VAE Decode"}
+        },
+        "9": {
+            "inputs": {
+                "filename_prefix": "GUO",
+                "images": ["8", 0]
+            },
+            "class_type": "SaveImage",
+            "_meta": {"title": "Save Image"}
+        }
+    }
+
+    # 连接到 WebSocket 服务器并触发图像生成
+    ws = websocket.WebSocket()
+    ws.connect(f"ws://{server_address}/ws?clientId={client_id}")
+    images = get_images(ws, prompt)
+    ws.close()
+
+    # 检查是否生成了符合条件的图像文件
+    output_directory = r"G:\\ComfyUI-aki-v1.3\\ComfyUI-aki\\output"
+    list_of_files = glob.glob(os.path.join(output_directory, "GUO*.PNG"))
+    
+    if not list_of_files:
+        print("未找到符合条件的图像文件，请检查生成过程。")
+        return
+
+    # 找到最新生成的图像文件
+    latest_file = max(list_of_files, key=os.path.getctime)
+    with open("latest_image.txt", "w") as f:
+        f.write(latest_file)
+    print(f"图像生成完毕，保存至: {latest_file}")
+
+
+#以下是AI生图部分，JSON文件内容
+prompt_text = """
+{
+  "3": {
+    "inputs": {
+      "seed": 770537520761403,
+      "steps": 20,
+      "cfg": 8,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "5",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "4": {
+    "inputs": {
+      "ckpt_name": "1.5\\\\counterfeitV30_25.safetensors"
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Load Checkpoint"
+    }
+  },
+  "5": {
+    "inputs": {
+      "width": 512,
+      "height": 512,
+      "batch_size": 1
+    },
+    "class_type": "EmptyLatentImage",
+    "_meta": {
+      "title": "Empty Latent Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "sea,underwater, ",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "text, watermark",
+      "clip": [
+        "4",
+        1
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Prompt)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "4",
+        2
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "9": {
+    "inputs": {
+      "filename_prefix": "GUO",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}
+"""
+#AI生图JSON内容结束
+
+prompt = json.loads(prompt_text)
+#set the text prompt for our positive CLIPTextEncode
+prompt["6"]["inputs"]["text"] = "ball"
+prompt["7"]["inputs"]["text"] = "text, watermark"
+
+#set the seed for our KSampler node
+prompt["3"]["inputs"]["seed"] = 5
+
+ws = websocket.WebSocket()
+ws.connect("ws://{}/ws?clientId={}".format(server_address, client_id))
+images = get_images(ws, prompt)
+ws.close() # for in case this example is used in an environment where it will be repeatedly called, like in a Gradio app. otherwise, you'll randomly receive connection timeouts
+#Commented out code to display the output images:
+
+#for node_id in images:
+#   for image_data in images[node_id]:
+ #       from PIL import Image
+  #      import io
+   #     image = Image.open(io.BytesIO(image_data))
+    #    image.show()
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        prompt_text = sys.argv[1]  # 接收命令行提示词参数
+        generate_image_with_comfyui(prompt_text)
+    else:
+        print("提示词未提供。请传入一个提示词作为参数。")
+
+\\web_app.py:
+from flask import Flask, render_template, request, jsonify, send_file
+import subprocess
+import os
+
+app = Flask(__name__)
+
+# 生成图像的API，接收前端传入的提示词
+@app.route('/generate_image', methods=['POST'])
+def generate_image():
+    try:
+        # 获取提示词输入
+        prompt_text = request.json.get("prompt_text", "default")
+
+        # 调用 websockets_api_example.py，传入提示词作为参数
+        result = subprocess.run(
+            ['python', 'G:/comfyUI项目/comfyUI-API-test/V2/websockets_api_example.py', prompt_text],
+            check=True,
+            capture_output=True,
+            text=True
+        )
+        
+        return jsonify({"status": "success", "message": "Image generation started", "output": result.stdout})
+    
+    except subprocess.CalledProcessError as e:
+        # 捕获和打印详细的错误输出
+        error_message = e.stderr or str(e)
+        print("Error occurred:", error_message)  # 打印到控制台，方便调试
+        return jsonify({"status": "error", "message": "Failed to start image generation", "error": error_message}), 500
+
+    except Exception as e:
+        print("Unexpected error:", str(e))
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# 检查图像生成状态
+@app.route('/get_latest_image', methods=['GET'])
+def get_latest_image():
+    try:
+        # 读取状态文件中的最新图像路径
+        with open("latest_image.txt", "r") as f:
+            image_path = f.read().strip()
+        
+        if os.path.exists(image_path):
+            return send_file(image_path, mimetype='image/png')
+        else:
+            return jsonify({"status": "error", "message": "Image not found"}), 404
+    except FileNotFoundError:
+        return jsonify({"status": "error", "message": "No image generated yet"}), 404
+
+# 主页，包含开始按钮
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+if __name__ == "__main__":
+    app.run(port=5000)
+
+\\index.html:
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>郭大爷ComfyUI图像生成器</title>
+    <script>
+        async function generateImage() {
+            // 获取用户输入的提示词
+            const promptText = document.getElementById("prompt-text").value;
+
+            try {
+                const response = await fetch('/generate_image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ prompt_text: promptText })
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    alert("图像生成已开始，请稍候...");
+                    setTimeout(fetchLatestImage, 5000); // 等待5秒后尝试获取最新图像
+                } else {
+                    alert("生成失败：" + result.message);
+                }
+            } catch (error) {
+                alert("请求出错：" + error.message);
+            }
+        }
+
+        async function fetchLatestImage() {
+            try {
+                const response = await fetch('/get_latest_image');
+                
+                if (response.ok) {
+                    const imageBlob = await response.blob();
+                    const imageUrl = URL.createObjectURL(imageBlob);
+                    document.getElementById('generated-image').src = imageUrl;
+                } else {
+                    const result = await response.json();
+                    alert("无法获取图像：" + result.message);
+                }
+            } catch (error) {
+                alert("请求图像时出错：" + error.message);
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>ComfyUI 图像生成器</h1>
+    <div>
+        <label for="prompt-text">输入提示词：</label>
+        <input type="text" id="prompt-text" placeholder="请输入提示词">
+    </div>
+    <button onclick="generateImage()">开始生成图像</button>
+    <div>
+        <h2>生成的图像：</h2>
+        <img id="generated-image" src="" alt="生成的图像将在此显示" style="max-width: 100%; height: auto;">
+    </div>
+</body>
+</html>
