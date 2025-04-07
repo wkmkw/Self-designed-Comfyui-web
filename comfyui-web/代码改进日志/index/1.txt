@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <!-- 基础元信息配置 -->
+    <meta charset="UTF-8"> <!-- 设置字符编码为UTF-8 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- 移动端视口适配 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"> <!-- 禁用缓存 -->
+    <meta http-equiv="Pragma" content="no-cache"> <!-- 兼容旧版HTTP缓存控制 -->
+    <meta http-equiv="Expires" content="0"> <!-- 立即过期缓存 -->
+    <title>AI图像生成器</title> <!-- 页面标题 -->
+    
+    <!-- 内联样式避免外部依赖 -->
+    <style>
+        /* 基础页面样式 */
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif; /* 使用系统默认字体 */
+            max-width: 800px; /* 限制内容宽度 */
+            margin: 20px auto; /* 居中显示 */
+            padding: 0 20px; /* 左右留白 */
+        }
+
+        /* 加载动画样式 */
+        .loader {
+            border: 4px solid #f3f3f3; /* 浅灰色边框 */
+            border-top: 4px solid #3498db; /* 蓝色顶部边框 */
+            border-radius: 50%; /* 圆形效果 */
+            width: 30px; /* 尺寸设置 */
+            height: 30px;
+            animation: spin 1s linear infinite; /* 旋转动画 */
+            margin: 20px auto; /* 居中显示 */
+        }
+
+        /* 加载动画关键帧 */
+        @keyframes spin {
+            0% { transform: rotate(0deg); } /* 起始角度 */
+            100% { transform: rotate(360deg); } /* 结束角度 */
+        }
+
+        /* 输入框样式 */
+        #prompt-text {
+            width: 100%; /* 全宽显示 */
+            padding: 12px; /* 内边距 */
+            border: 2px solid #3498db; /* 蓝色边框 */
+            border-radius: 6px; /* 圆角 */
+            margin: 15px 0; /* 外边距 */
+            font-size: 16px; /* 字体大小 */
+        }
+
+        /* 按钮交互样式 */
+        button {
+            background: #3498db; /* 蓝色背景 */
+            color: white; /* 白色文字 */
+            padding: 12px 25px; /* 内边距 */
+            border: none; /* 去除边框 */
+            border-radius: 6px; /* 圆角 */
+            cursor: pointer; /* 手型指针 */
+            transition: all 0.3s ease; /* 过渡动画 */
+            font-size: 16px; /* 字体大小 */
+            width: 100%; /* 全宽按钮 */
+        }
+
+        /* 按钮悬停效果 */
+        button:hover {
+            background: #2980b9; /* 深蓝色 */
+            transform: translateY(-2px); /* 上浮效果 */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1); /* 阴影效果 */
+        }
+
+        /* 图片容器样式 */
+        #image-container {
+            margin-top: 25px; /* 顶部外边距 */
+            text-align: center; /* 内容居中 */
+            min-height: 300px; /* 最小高度防止布局抖动 */
+        }
+
+        /* 生成图片样式 */
+        #generated-image {
+            max-width: 100%; /* 响应式宽度 */
+            height: auto; /* 保持比例 */
+            border-radius: 8px; /* 圆角 */
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15); /* 立体阴影 */
+            display: none; /* 默认隐藏 */
+        }
+    </style>
+</head>
+<body>
+    <!-- 页面主标题 -->
+    <h1>AI图像生成器</h1>
+    
+    <!-- 提示词输入区域 -->
+    <div>
+        <label for="prompt-text">创作提示：</label>
+        <input 
+            type="text" 
+            id="prompt-text" 
+            placeholder="请输入描述文字，例如：'夕阳下的海滩，卡通风格'"
+            aria-label="图像描述输入框" <!-- 无障碍支持 -->
+        >
+    </div>
+
+    <!-- 生成按钮 -->
+    <button onclick="handleGenerate()" id="generate-btn">
+        立即生成
+    </button>
+
+    <!-- 图片展示区域 -->
+    <div id="image-container">
+        <div class="loader" style="display: none;"></div> <!-- 加载指示器 -->
+        <img 
+            id="generated-image" 
+            src="" 
+            alt="生成结果展示" 
+            aria-describedby="image-description" <!-- 无障碍关联 -->
+        >
+    </div>
+
+    <script>
+        // 全局状态管理
+        let currentRequest = null; // 用于存储当前请求对象
+        
+        // 生成按钮点击处理器
+        async function handleGenerate() {
+            const promptText = document.getElementById("prompt-text").value.trim();
+            const generateBtn = document.getElementById("generate-btn");
+            
+            // 输入验证
+            if (!promptText) {
+                alert("请输入创作描述");
+                return;
+            }
+
+            // 禁用按钮防止重复提交
+            generateBtn.disabled = true;
+            generateBtn.textContent = "生成中...";
+            
+            try {
+                // 显示加载指示器
+                document.querySelector('.loader').style.display = 'block';
+                
+                // 创建请求控制器（支持超时中断）
+                const controller = new AbortController();
+                currentRequest = controller;
+                setTimeout(() => controller.abort(), 60000); // 60秒超时
+
+                // 发送生成请求
+                const response = await fetch('http://localhost:5000/generate_image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest' // 防止CSRF误判
+                    },
+                    body: JSON.stringify({ prompt_text: promptText }),
+                    signal: controller.signal,
+                    mode: 'cors',
+                    credentials: 'include'
+                });
+
+                // 处理HTTP错误状态
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(`[${response.status}] ${error.message}`);
+                }
+
+                // 解析响应数据
+                const result = await response.json();
+                if (result.status === 'success') {
+                    // 轮询获取最新图片
+                    setTimeout(pollImage, 5000); // 5秒后开始轮询
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                // 错误处理
+                console.error('生成失败:', error);
+                alert(`生成失败: ${error.message}`);
+                resetUI();
+            }
+        }
+
+        // 轮询获取最新图片
+        async function pollImage(attempt = 0) {
+            try {
+                const response = await fetch('/get_latest_image', {
+                    cache: 'no-store' // 禁用缓存
+                });
+
+                if (response.status === 404 && attempt < 6) { // 最多重试6次
+                    setTimeout(() => pollImage(attempt + 1), 3000); // 3秒重试
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error(`图片获取失败: ${response.status}`);
+                }
+
+                // 处理图片数据
+                const blob = await response.blob();
+                const imageUrl = URL.createObjectURL(blob);
+                const imgElement = document.getElementById('generated-image');
+                
+                // 图片加载完成处理
+                imgElement.onload = () => {
+                    URL.revokeObjectURL(imageUrl); // 释放内存
+                    document.querySelector('.loader').style.display = 'none';
+                    imgElement.style.display = 'block';
+                    resetUI();
+                };
+                
+                imgElement.src = imageUrl;
+            } catch (error) {
+                console.error('图片获取失败:', error);
+                alert(error.message);
+                resetUI();
+            }
+        }
+
+        // 重置界面状态
+        function resetUI() {
+            document.getElementById('generate-btn').disabled = false;
+            document.getElementById('generate-btn').textContent = "立即生成";
+            if (currentRequest) {
+                currentRequest.abort(); // 中止未完成请求
+                currentRequest = null;
+            }
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('load', () => {
+            // 输入框回车事件绑定
+            document.getElementById('prompt-text').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') handleGenerate();
+            });
+        });
+    </script>
+</body>
+</html>

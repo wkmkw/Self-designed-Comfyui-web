@@ -1,0 +1,285 @@
+# websockets_api_example.py
+
+# 该示例使用websockets API监听提示词执行完成事件，完成后通过/history端点下载图像
+
+import websocket  # 注意：使用websocket-client库(https://github.com/websocket-client/websocket-client)
+import uuid       # 用于生成唯一客户端ID
+import json       # 处理JSON数据
+import urllib.request  # 发送HTTP请求
+import urllib.parse    # URL编码处理
+import os         # 文件系统操作
+import glob       # 文件路径匹配
+import sys        # 命令行参数处理
+
+# 服务器地址配置
+server_address = "127.0.0.1:8188"  # ComfyUI服务器地址
+client_id = str(uuid.uuid4())       # 生成唯一客户端标识
+
+def queue_prompt(prompt):
+    """将提示词任务加入执行队列"""
+    # 构造请求数据：包含提示词结构和客户端ID
+    request_data = {"prompt": prompt, "client_id": client_id}
+    data = json.dumps(request_data).encode('utf-8')  # 序列化为JSON字节流
+    print("发送提示数据:", request_data)  # 调试输出
+
+    # 设置请求头并创建请求对象
+    headers = {'Content-Type': 'application/json'}
+    req = urllib.request.Request(
+        f"http://{server_address}/prompt", 
+        data=data, 
+        headers=headers
+    )
+    
+    try:
+        # 发送请求并获取响应
+        response = urllib.request.urlopen(req)
+        return json.loads(response.read())  # 解析响应JSON
+    except urllib.error.HTTPError as e:
+        # 处理HTTP错误
+        print(f"HTTP错误: {e.code} - {e.reason}")
+        print(e.read().decode())  # 输出服务器错误信息
+        raise
+
+def get_image(filename, subfolder, folder_type):
+    """根据文件名获取生成的图像数据"""
+    data = {"filename": filename, "subfolder": subfolder, "type": folder_type}
+    url_values = urllib.parse.urlencode(data)  # URL编码参数
+    # 构建查看图像的URL请求
+    with urllib.request.urlopen(f"http://{server_address}/view?{url_values}") as response:
+        return response.read()  # 返回图像二进制数据
+
+def get_history(prompt_id):
+    """获取指定提示ID的执行历史记录"""
+    with urllib.request.urlopen(f"http://{server_address}/history/{prompt_id}") as response:
+        return json.loads(response.read())  # 解析历史记录JSON
+
+def get_images(ws, prompt):
+    """通过WebSocket监听执行进度并获取生成的图像"""
+    prompt_id = queue_prompt(prompt)['prompt_id']  # 提交提示词并获取ID
+    output_images = {}  # 存储输出图像
+    
+    while True:
+        out = ws.recv()  # 接收WebSocket消息
+        if isinstance(out, str):
+            message = json.loads(out)  # 解析JSON消息
+            if message['type'] == 'executing':  # 检查执行状态
+                data = message['data']
+                # 当节点执行完成且提示ID匹配时退出循环
+                if data['node'] is None and data['prompt_id'] == prompt_id:
+                    break
+        else:
+            # 二进制数据为潜在预览图（此处未处理）
+            continue
+    
+    # 从历史记录获取输出图像
+    history = get_history(prompt_id)
+    history = history[prompt_id]['outputs']
+    
+    # 收集所有输出图像数据
+    for node_id in history:
+        node_output = history[node_id]
+        if 'images' in node_output:
+            images_output = []
+            for image in node_output['images']:
+                image_data = get_image(image['filename'], image['subfolder'], image['type'])
+                images_output.append(image_data)
+            output_images[node_id] = images_output
+    
+    return output_images
+
+def generate_image_with_comfyui(prompt_text, task_id):
+    """使用新版工作流配置生成图像"""
+    # 完整工作流配置
+    prompt = {
+        # CLIP文本编码器（正向提示词）
+        "6": {
+            "inputs": {
+                "text": prompt_text,  # 动态传入的提示词
+                "speak_and_recognation": True,  # 语音识别标记
+                "clip": ["11", 0]     # 连接双CLIP加载器
+            },
+            "class_type": "CLIPTextEncode",
+            "_meta": {"title": "CLIP文本编码器"}
+        },
+        
+        # VAE加载器
+        "10": {
+            "inputs": {"vae_name": "ae.sft"},
+            "class_type": "VAELoader",
+            "_meta": {"title": "VAE加载器"}
+        },
+        
+        # 双CLIP加载器
+        "11": {
+            "inputs": {
+                "clip_name1": "t5\\t5xxl_fp8_e4m3fn.safetensors",
+                "clip_name2": "clip_l.safetensors",
+                "type": "flux"
+            },
+            "class_type": "DualCLIPLoader",
+            "_meta": {"title": "双CLIP加载器"}
+        },
+        
+        # UNET主模型加载
+        "12": {
+            "inputs": {
+                "unet_name": "F.1基础算法模型-哩布在线可运行_F.1-dev-fp8.safetensors",
+                "weight_dtype": "fp8_e4m3fn"
+            },
+            "class_type": "UNETLoader",
+            "_meta": {"title": "UNET加载器"}
+        },
+        
+        # 高级采样器配置
+        "13": {
+            "inputs": {
+                "noise": ["25", 0],     # 随机噪声输入
+                "guider": ["22", 0],   # 引导器配置
+                "sampler": ["16", 0],  # 采样器选择
+                "sigmas": ["17", 0],   # 调度器参数
+                "latent_image": ["70", 0]  # 初始潜空间
+            },
+            "class_type": "SamplerCustomAdvanced",
+            "_meta": {"title": "自定义采样器(高级)"}
+        },
+        
+        # K采样器选择
+        "16": {
+            "inputs": {"sampler_name": "euler"},
+            "class_type": "KSamplerSelect",
+            "_meta": {"title": "K采样器选择"}
+        },
+        
+        # 调度器配置
+        "17": {
+            "inputs": {
+                "scheduler": "simple",  # 简单调度模式
+                "steps": 45,           # 总采样步数
+                "denoise": 1,          # 去噪强度
+                "model": ["73", 0]     # 连接LoRA模型
+            },
+            "class_type": "BasicScheduler",
+            "_meta": {"title": "基础调度器"}
+        },
+        
+        # 引导器配置
+        "22": {
+            "inputs": {
+                "model": ["73", 0],      # 主模型输入
+                "conditioning": ["6", 0] # 文本编码输入
+            },
+            "class_type": "BasicGuider",
+            "_meta": {"title": "基础引导"}
+        },
+        
+        # 随机噪声生成
+        "25": {
+            "inputs": {"noise_seed": 1007042570686024},  # 固定随机种子
+            "class_type": "RandomNoise",
+            "_meta": {"title": "随机噪波"}
+        },
+        
+        # VAE解码器
+        "64": {
+            "inputs": {
+                "samples": ["13", 0],  # 采样器输出
+                "vae": ["10", 0]       # VAE模型输入
+            },
+            "class_type": "VAEDecode",
+            "_meta": {"title": "VAE解码"}
+        },
+        
+        # 图像预览节点
+        "65": {
+            "inputs": {"images": ["64", 0]},  # 解码后的图像
+            "class_type": "PreviewImage",
+            "_meta": {"title": "预览图像"}
+        },
+        
+        # 初始潜空间生成
+        "70": {
+            "inputs": {
+                "width": 512,        # 图像宽度
+                "height": 512,      # 图像高度
+                "batch_size": 1      # 生成批次
+            },
+            "class_type": "EmptyLatentImage",
+            "_meta": {"title": "空Latent"}
+        },
+        
+        # LoRA模型加载
+        "73": {
+            "inputs": {
+                "lora_name": "F.1-矢量卡通风格LOGO_V1.safetensors",
+                "strength_model": 2.5,  # 模型权重强度
+                "model": ["12", 0]      # 基础模型输入
+            },
+            "class_type": "LoraLoaderModelOnly",
+            "_meta": {"title": "LoRA加载器(仅模型)"}
+        }
+    }
+
+    # 动态参数配置示例
+    # 修改随机种子
+    prompt["25"]["inputs"]["noise_seed"] = int(time.time() * 1000) % 2**32
+    
+    # 调整采样步数
+    prompt["17"]["inputs"]["steps"] = 50  
+    
+    # 动态修改LoRA权重
+    prompt["73"]["inputs"]["strength_model"] = 2.0
+    
+    # 以下保持原有WebSocket通信逻辑
+    ws = websocket.WebSocket()
+    ws.connect(f"ws://{server_address}/ws?clientId={client_id}")
+    images = get_images(ws, prompt)
+    ws.close()
+
+    # 保存文件逻辑
+    output_directory = "outputs"
+    os.makedirs(output_directory, exist_ok=True)
+    output_path = os.path.join(output_directory, f"{task_id}.png")
+    
+    # 假设从生成的images中提取并保存为PNG
+    with open(output_path, "wb") as f:
+        f.write(images['node_id'][0])  # 根据实际节点ID调整
+    
+    return output_path
+    
+    if list_of_files:
+        latest_file = max(list_of_files, key=os.path.getctime)
+        print(f"生成完成: {latest_file}")
+        return latest_file
+    else:
+        print("生成失败，请检查工作流配置")
+        return None
+
+    # 连接WebSocket服务器
+    ws = websocket.WebSocket()
+    ws.connect(f"ws://{server_address}/ws?clientId={client_id}")
+    
+    # 获取生成图像
+    images = get_images(ws, prompt)
+    ws.close()  # 关闭连接
+
+    # 检查输出目录中的图像文件
+    output_directory = r"D:\\comfyui-portable-nfc1.2-windows\\ComfyUI\\temp"
+    list_of_files = glob.glob(os.path.join(output_directory, "GUO*.PNG"))
+    
+    if not list_of_files:
+        print("未找到符合条件的图像文件")
+        return
+
+    # 记录最新生成的图像路径
+    latest_file = max(list_of_files, key=os.path.getctime)
+    with open("latest_image.txt", "w") as f:
+        f.write(latest_file)
+    print(f"图像保存路径: {latest_file}")
+
+# 主程序入口
+if __name__ == "__main__":
+    if len(sys.argv) > 1:  # 检查命令行参数
+        prompt_text = sys.argv[1]  # 获取提示词参数
+        generate_image_with_comfyui(prompt_text)
+    else:
+        print("请提供提示词参数")

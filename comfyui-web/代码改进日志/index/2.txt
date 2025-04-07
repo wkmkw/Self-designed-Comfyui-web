@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-store, max-age=0">
+    <title>AI Logo设计工坊 - 稳定创作平台</title>
+    <style>
+        :root {
+            --primary-color: #ce8460;
+            --hover-color: #b36b4a;
+            --text-color: #333;
+            --bg-color: #f8f9fa;
+            --shadow-light: rgba(0,0,0,0.1);
+            --shadow-medium: rgba(0,0,0,0.15);
+        }
+
+        /* 重置样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            color: var(--text-color);
+            background: var(--bg-color);
+            line-height: 1.6;
+        }
+
+        /* 头部样式 */
+        .header {
+            background: white;
+            box-shadow: 0 2px 10px var(--shadow-light);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo {
+            text-align: center;
+            padding: 1.5rem 0;
+            transition: transform 0.3s;
+        }
+
+        .logo:hover {
+            transform: translateY(-3px);
+        }
+
+        .logo img {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+            transition: transform 0.3s;
+        }
+
+        .logo h4 {
+            font-size: 1.8rem;
+            margin: 0.5rem 0;
+            color: var(--primary-color);
+            letter-spacing: 2px;
+            transition: color 0.3s;
+        }
+
+        .logo p {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        /* 导航栏优化 */
+        .nav {
+            border-top: 1px solid #eee;
+            border-bottom: 1px solid #eee;
+            background: white;
+        }
+
+        .nav > ul {
+            display: flex;
+            justify-content: center;
+            padding: 1rem 0;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .nav li {
+            position: relative;
+            margin: 0 1.5rem;
+        }
+
+        .nav a {
+            color: var(--text-color);
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .nav a::after {
+            content: '';
+            position: absolute;
+            bottom: -3px;
+            left: 50%;
+            width: 0;
+            height: 2px;
+            background: var(--primary-color);
+            transition: all 0.3s;
+        }
+
+        .nav a:hover::after {
+            width: 100%;
+            left: 0;
+        }
+
+        /* 主内容区 */
+        .main-content {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        /* AI生成器样式优化 */
+        .generator-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px var(--shadow-medium);
+            margin-top: 2rem;
+        }
+
+        #prompt-text {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid var(--primary-color);
+            border-radius: 8px;
+            margin: 1rem 0;
+            font-size: 1rem;
+            transition: all 0.3s;
+        }
+
+        #prompt-text:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(206, 132, 96, 0.2);
+        }
+
+        button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1.1rem;
+            width: 100%;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button:hover:not(:disabled) {
+            background: var(--hover-color);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(206, 132, 96, 0.3);
+        }
+
+        /* 图片容器 */
+        #image-container {
+            margin: 2rem 0;
+            min-height: 400px;
+            position: relative;
+            background: #f8f8f8;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .loader {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1.2s linear infinite;
+            margin: 2rem auto;
+            display: none;
+        }
+
+        #generated-image {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+            display: none;
+            opacity: 0;
+            transition: opacity 0.5s;
+        }
+
+        .fade-in {
+            opacity: 1 !important;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .nav li {
+                margin: 0 0.8rem;
+            }
+            
+            .generator-section {
+                padding: 1.5rem;
+            }
+            
+            button {
+                padding: 0.8rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo h4 {
+                font-size: 1.5rem;
+            }
+            
+            .nav > ul {
+                flex-direction: column;
+            }
+            
+            .nav li {
+                margin: 0.5rem 0;
+            }
+            
+            #image-container {
+                min-height: 300px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="logo">
+            <img src="web/img/logo.png" alt="AI Logo设计">
+            <h4>AI Logo工坊</h4>
+            <p>智能设计，彰显个性</p>
+        </div>
+        <nav class="nav">
+            <ul>
+                <li><a href="index.html">首页</a></li>
+                <li><a href="about.html">设计样本</a></li>
+                <li><a href="logozhizuo2.html">在线制作</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main class="main-content">
+        <div class="generator-section">
+            <h1>? AI Logo生成器</h1>
+            
+            <div role="group" aria-labelledby="prompt-label">
+                <label id="prompt-label" for="prompt-text">设计需求：</label>
+                <input 
+                    type="text" 
+                    id="prompt-text" 
+                    placeholder="例：'科技感字母标志，蓝黑渐变风格'"
+                    aria-required="true"
+                    maxlength="200"
+                >
+            </div>
+
+            <button id="generate-btn" onclick="handleGenerate()">
+                立即生成
+            </button>
+
+            <div id="image-container">
+                <div class="loader"></div>
+                <img id="generated-image" src="" alt="生成结果" loading="lazy">
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // 增强的状态管理
+        const state = {
+            currentController: null,
+            retryCount: 0,
+            maxRetries: 5
+        };
+
+        // 优化后的生成处理器
+        async function handleGenerate() {
+            const promptInput = document.getElementById('prompt-text');
+            const generateBtn = document.getElementById('generate-btn');
+            const promptText = promptInput.value.trim();
+            
+            if (!validatePrompt(promptText)) {
+                showAlert('请输入有效的创作描述（1-200个字符）');
+                promptInput.focus();
+                return;
+            }
+
+            disableUI(true);
+            showLoader(true);
+            
+            try {
+                state.currentController = new AbortController();
+                setTimeout(() => state.currentController?.abort(), 600000); // 将超时时间延长到 120 秒
+
+                const response = await fetch('/generate_image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Protection': '1'
+                    },
+                    body: JSON.stringify({ prompt_text: promptText }),
+                    signal: state.currentController.signal
+                });
+
+                await handleResponse(response);
+            } catch (error) {
+                handleError(error);
+            } finally {
+                state.currentController = null;
+            }
+        }
+
+        // 新增验证函数
+        function validatePrompt(text) {
+            return text.length > 0 && text.length <= 200 && /^[\w\W\p{Script=Han}]+$/u.test(text);
+        }
+
+        // 增强的响应处理器
+        async function handleResponse(response) {
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({
+                    message: `请求失败：${response.status} ${response.statusText}`
+                }));
+                throw new Error(error.message);
+            }
+
+            const data = await response.json();
+            if (data.status === 'success') {
+                startPolling();
+            } else {
+                throw new Error(data.message || '未知错误');
+            }
+        }
+
+        // 优化的轮询机制
+        function startPolling() {
+            state.retryCount = 0;
+            pollImage();
+        }
+
+        // 指数退避轮询策略
+        async function pollImage() {
+            try {
+                const response = await fetch('/get_latest_image', {
+                    cache: 'reload',
+                    signal: state.currentController?.signal
+                });
+
+                if (response.status === 404) {
+                    if (state.retryCount < state.maxRetries) {
+                        state.retryCount++;
+                        const delay = Math.min(30000 * Math.pow(2, state.retryCount), 300000);
+                        setTimeout(pollImage, delay);
+                        return;
+                    }
+                    throw new Error('图片生成超时');
+                }
+
+                if (!response.ok) throw new Error('图片获取失败');
+
+                const blob = await response.blob();
+                if (!blob.type.startsWith('image/')) {
+                    throw new Error('无效的图片格式');
+                }
+
+                displayImage(blob);
+            } catch (error) {
+                handleError(error);
+            }
+        }
+
+        // 图片显示处理
+        function displayImage(blob) {
+            const imgElement = document.getElementById('generated-image');
+            const objectURL = URL.createObjectURL(blob);
+
+            imgElement.onload = () => {
+                URL.revokeObjectURL(objectURL);
+                imgElement.classList.add('fade-in');
+                showLoader(false);
+                disableUI(false);
+            };
+
+            imgElement.onerror = () => {
+                URL.revokeObjectURL(objectURL);
+                throw new Error('图片加载失败');
+            };
+
+            imgElement.style.display = 'block';
+            imgElement.src = objectURL;
+        }
+
+        // 增强的错误处理
+        function handleError(error) {
+            console.error('Error:', error);
+            showAlert(error.message || '发生未知错误');
+            resetUI();
+        }
+
+        // UI控制函数
+        function disableUI(disabled) {
+            const btn = document.getElementById('generate-btn');
+            btn.disabled = disabled;
+            btn.textContent = disabled ? '生成中...' : '立即生成';
+        }
+
+        function showLoader(show) {
+            document.querySelector('.loader').style.display = show ? 'block' : 'none';
+        }
+
+        function showAlert(message) {
+            // 可替换为更优雅的提示方式
+            alert(message);
+        }
+
+        function resetUI() {
+            disableUI(false);
+            showLoader(false);
+            state.currentController?.abort();
+        }
+
+        // 事件监听优化
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('prompt-text').addEventListener('input', function() {
+                this.value = this.value.slice(0, 200);
+            });
+
+            document.getElementById('prompt-text').addEventListener('keydown', e => {
+                if (e.key === 'Enter' && !e.repeat) {
+                    handleGenerate();
+                }
+            });
+        });
+
+        // 页面可见性处理
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') {
+                state.currentController?.abort();
+            }
+        });
+    </script>
+</body>
+</html>
